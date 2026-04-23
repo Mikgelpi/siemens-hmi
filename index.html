@@ -2,7 +2,7 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#07100f" />
     <title>HMI · S7-1200 G2 Terminal · Public Gateway</title>
 
@@ -16,6 +16,8 @@
 
     <!-- MQTT client (CDN) -->
     <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+    <!-- Chart.js v4 (UMD) — libreria grafici -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
     <style>
       /* ==================================================
@@ -25,6 +27,7 @@
         --bg: #07100f;
         --bg-2: #0d1a18;
         --panel: #0f201e;
+        --panel-raised: #132825;
         --border: #1e3a36;
         --border-dim: #142724;
         --amber: #ffb400;
@@ -40,13 +43,20 @@
         --ease: cubic-bezier(0.22, 1, 0.36, 1);
         --mono: "JetBrains Mono", ui-monospace, monospace;
         --sans: "Archivo", system-ui, sans-serif;
+
+        /* Paletta grafico (tag 1..8) */
+        --c1: #5af5c4;
+        --c2: #ffb400;
+        --c3: #7aa9ff;
+        --c4: #ff7ac6;
+        --c5: #c6ff5a;
+        --c6: #ff9c6e;
+        --c7: #a5f3fc;
+        --c8: #e9b8ff;
       }
 
-      * {
-        box-sizing: border-box;
-      }
-      html,
-      body {
+      * { box-sizing: border-box; }
+      html, body {
         margin: 0;
         padding: 0;
         min-height: 100%;
@@ -54,698 +64,724 @@
       body {
         font-family: var(--sans);
         color: var(--text);
-        background: radial-gradient(
-            ellipse at 20% 0%,
-            #112a26 0%,
-            transparent 60%
-          ),
+        background:
+          radial-gradient(ellipse at 20% 0%, #112a26 0%, transparent 60%),
           radial-gradient(ellipse at 100% 100%, #0a1a18 0%, transparent 55%),
           var(--bg);
         min-height: 100vh;
         letter-spacing: 0.01em;
         overflow-x: hidden;
+        -webkit-tap-highlight-color: transparent;
       }
 
-      /* effetto grana sottile */
-      .grain {
-        position: fixed;
-        inset: 0;
+      /* grana sottile */
+      body::after {
+        content: "";
+        position: fixed; inset: 0;
         pointer-events: none;
-        opacity: 0.04;
         z-index: 1;
         background-image: repeating-linear-gradient(
           0deg,
-          rgba(255, 255, 255, 0.4) 0px,
-          rgba(255, 255, 255, 0.4) 1px,
-          transparent 1px,
-          transparent 3px
+          rgba(255,255,255,.03) 0 1px,
+          transparent 1px 3px
         );
         mix-blend-mode: overlay;
       }
-
-      /* scanline orizzontali molto tenui */
+      /* scanline orizzontali tenui */
       body::before {
         content: "";
-        position: fixed;
-        inset: 0;
+        position: fixed; inset: 0;
         background: repeating-linear-gradient(
           to bottom,
-          rgba(90, 245, 196, 0.015) 0px,
-          rgba(90, 245, 196, 0.015) 2px,
-          transparent 2px,
-          transparent 4px
+          rgba(90,245,196,.015) 0 2px,
+          transparent 2px 4px
         );
         pointer-events: none;
         z-index: 1;
       }
 
-      /* ==================================================
-         Topbar
-         ================================================== */
-      .topbar {
+      .wrap {
         position: relative;
         z-index: 2;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 24px;
-        padding: 20px 32px;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: clamp(12px, 3vw, 28px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+      }
+
+      /* ==================================================
+         Header
+         ================================================== */
+      header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: end;
+        gap: 16px;
+        padding-bottom: 18px;
         border-bottom: 1px solid var(--border);
-        background: linear-gradient(
-          180deg,
-          rgba(13, 26, 24, 0.9),
-          rgba(13, 26, 24, 0.4)
-        );
-        backdrop-filter: blur(4px);
-        flex-wrap: wrap;
+        margin-bottom: clamp(16px, 3vw, 26px);
       }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
+        min-width: 0;
       }
-      .logo-mark {
-        display: flex;
-        gap: 4px;
-        align-items: center;
+      .brand-mark {
+        width: 42px; height: 42px;
+        flex-shrink: 0;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--amber) 0%, #c47500 100%);
+        display: grid; place-items: center;
+        color: #10100a;
+        font-family: var(--mono);
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: .02em;
+        box-shadow: 0 0 26px var(--amber-glow), inset 0 0 0 1px rgba(255,255,255,.2);
       }
-      .logo-mark .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--amber);
-        box-shadow: 0 0 12px var(--amber-glow);
-      }
-      .logo-mark .dot:nth-child(2) {
-        background: var(--teal);
-        box-shadow: 0 0 12px rgba(90, 245, 196, 0.4);
-      }
-      .logo-mark .dot:nth-child(3) {
-        background: var(--text-dim);
-        box-shadow: none;
-      }
-      .brand-text {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.1;
-      }
+      .brand-text { min-width: 0; }
       .brand-title {
         font-family: var(--mono);
-        font-weight: 600;
-        font-size: 15px;
-        letter-spacing: 0.12em;
+        font-size: clamp(15px, 2.2vw, 20px);
+        font-weight: 500;
         color: var(--text);
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .brand-sub {
         font-family: var(--mono);
-        font-weight: 300;
-        font-size: 11px;
-        letter-spacing: 0.22em;
+        font-size: 10.5px;
         color: var(--text-dim);
-        margin-top: 2px;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        margin-top: 4px;
       }
 
-      .meta {
+      .header-right {
         display: flex;
-        gap: 26px;
         align-items: center;
+        gap: 14px;
         flex-wrap: wrap;
+        justify-content: flex-end;
       }
-      .meta-item {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-      }
-      .meta-label {
+
+      .clock {
         font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 0.22em;
-        color: var(--text-mute);
-      }
-      .meta-value {
-        font-family: var(--mono);
-        font-size: 13px;
-        color: var(--text);
-        font-weight: 500;
-      }
-      .meta-item.status {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 8px;
-      }
-      .status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--text-mute);
-        box-shadow: 0 0 8px transparent;
-        transition: all 0.3s var(--ease);
-      }
-      .status-dot.online {
-        background: var(--teal);
-        box-shadow: 0 0 14px rgba(90, 245, 196, 0.7);
-      }
-      .status-dot.offline {
-        background: var(--danger);
-        box-shadow: 0 0 10px rgba(255, 90, 106, 0.5);
-      }
-      .status-dot.warn {
-        background: var(--amber);
-        box-shadow: 0 0 10px var(--amber-glow);
+        font-size: clamp(14px, 2.2vw, 18px);
+        color: var(--amber);
+        letter-spacing: .12em;
+        text-shadow: 0 0 18px var(--amber-glow);
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: rgba(255, 180, 0, .04);
       }
 
       /* ==================================================
-         Main
+         Status bar
          ================================================== */
-      .main {
-        position: relative;
-        z-index: 2;
-        max-width: 1320px;
-        margin: 0 auto;
-        padding: 40px 32px 80px;
+      .status-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-bottom: clamp(16px, 3vw, 24px);
       }
-
-      .section {
-        margin-bottom: 56px;
-      }
-
-      .section-head {
+      .status-cell {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 24px;
+        gap: 10px;
+        padding: 12px 14px;
+        background: var(--panel);
+        border: 1px solid var(--border-dim);
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+        min-width: 0;
       }
-      .bracket {
+      .status-cell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(90,245,196,.02));
+        pointer-events: none;
+      }
+      .status-cell .dot {
+        width: 9px; height: 9px;
+        border-radius: 50%;
+        background: var(--text-mute);
+        flex-shrink: 0;
+        box-shadow: 0 0 0 3px rgba(255,255,255,.02);
+      }
+      .status-cell .dot.online {
+        background: var(--ok);
+        box-shadow: 0 0 12px var(--ok), 0 0 0 3px rgba(90,245,196,.1);
+        animation: pulse 2s infinite;
+      }
+      .status-cell .dot.offline {
+        background: var(--danger);
+        box-shadow: 0 0 10px rgba(255,90,106,.4);
+      }
+      .status-cell .dot.warn {
+        background: var(--amber);
+        box-shadow: 0 0 10px var(--amber-glow);
+        animation: pulse 1s infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: .6; transform: scale(.85); }
+      }
+
+      .status-cell .label {
         font-family: var(--mono);
-        color: var(--amber);
-        font-size: 18px;
+        font-size: 9.5px;
+        color: var(--text-mute);
+        letter-spacing: .16em;
+        text-transform: uppercase;
+      }
+      .status-cell .value {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--text);
+        letter-spacing: .04em;
         font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status-cell .value.dim { color: var(--text-dim); font-weight: 400; }
+
+      /* ==================================================
+         Sezioni
+         ================================================== */
+      .section {
+        margin-bottom: clamp(20px, 3vw, 30px);
+      }
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
       }
       .section-title {
         font-family: var(--mono);
-        font-size: 13px;
-        letter-spacing: 0.24em;
-        color: var(--text);
+        font-size: 11px;
+        color: var(--amber);
+        letter-spacing: .24em;
         text-transform: uppercase;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
-      .section-dash {
-        flex: 1;
-        height: 1px;
-        background: linear-gradient(
-          to right,
-          var(--border) 0%,
-          transparent 100%
-        );
+      .section-title::before {
+        content: "";
+        width: 18px; height: 1px;
+        background: var(--amber);
+        box-shadow: 0 0 8px var(--amber);
       }
       .section-hint {
         font-family: var(--mono);
-        font-size: 11px;
-        color: var(--text-dim);
-        letter-spacing: 0.12em;
+        font-size: 10px;
+        color: var(--text-mute);
+        letter-spacing: .14em;
+        text-transform: uppercase;
       }
 
       /* ==================================================
-         Tag grid + card
+         Tag grid (mobile-first)
          ================================================== */
       .tag-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-        gap: 20px;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+      }
+
+      @media (min-width: 600px) {
+        .tag-grid {
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 14px;
+        }
       }
 
       .tag-card {
+        background: var(--panel);
+        border: 1px solid var(--border-dim);
+        border-radius: 10px;
+        padding: 14px;
         position: relative;
-        background: linear-gradient(
-          180deg,
-          rgba(15, 32, 30, 0.7),
-          rgba(10, 22, 20, 0.9)
-        );
-        border: 1px solid var(--border);
-        padding: 22px 22px 20px;
-        transition: all 0.25s var(--ease);
         overflow: hidden;
+        transition: border-color .3s var(--ease), transform .2s var(--ease);
+        cursor: default;
+        min-width: 0;
+      }
+      .tag-card.writable { cursor: pointer; }
+      .tag-card.writable:hover {
+        border-color: var(--teal-dim);
+        transform: translateY(-1px);
+      }
+      .tag-card.writable:active {
+        transform: translateY(0);
       }
       .tag-card::before {
         content: "";
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          to right,
-          transparent,
-          var(--teal-dim) 30%,
-          var(--teal-dim) 70%,
-          transparent
-        );
-        opacity: 0.5;
-      }
-      .tag-card:hover {
-        border-color: var(--teal-dim);
-        background: linear-gradient(
-          180deg,
-          rgba(18, 38, 35, 0.8),
-          rgba(12, 26, 24, 0.95)
-        );
-        transform: translateY(-1px);
-      }
-      .tag-card.writable {
-        cursor: pointer;
-      }
-      .tag-card.writable:hover::after {
-        content: "click per scrivere";
-        position: absolute;
-        top: 10px;
-        right: 14px;
-        font-family: var(--mono);
-        font-size: 9px;
-        letter-spacing: 0.18em;
-        color: var(--amber);
-        text-transform: uppercase;
-        opacity: 0.8;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(90,245,196,.04) 0%, transparent 60%);
+        pointer-events: none;
       }
 
       .tag-name {
         font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: 0.2em;
-        color: var(--text-dim);
+        font-size: 10px;
+        color: var(--teal-dim);
+        letter-spacing: .18em;
         text-transform: uppercase;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .tag-label {
         font-family: var(--sans);
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text);
-        margin-top: 4px;
-        letter-spacing: 0.02em;
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-bottom: 10px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
+
       .tag-value-row {
         display: flex;
         align-items: baseline;
-        gap: 8px;
-        margin-top: 18px;
-        min-height: 44px;
+        gap: 6px;
+        margin-bottom: 10px;
+        min-width: 0;
       }
       .tag-value {
         font-family: var(--mono);
-        font-size: 32px;
+        font-size: clamp(22px, 5vw, 32px);
         font-weight: 500;
         color: var(--amber);
+        letter-spacing: .02em;
+        text-shadow: 0 0 22px var(--amber-glow);
         line-height: 1;
-        text-shadow: 0 0 20px var(--amber-glow);
-        letter-spacing: 0.02em;
-        overflow-wrap: anywhere;
-        transition: color 0.3s var(--ease);
+        transition: color .2s, text-shadow .2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
       }
       .tag-value.pending {
         color: var(--text-mute);
         text-shadow: none;
       }
       .tag-value.flash {
-        animation: tagValueFlash 260ms var(--ease);
+        animation: flashWhite .5s var(--ease);
       }
-      @keyframes tagValueFlash {
-        0% {
-          text-shadow: 0 0 20px var(--amber-glow);
-        }
-        40% {
-          text-shadow: 0 0 36px var(--amber), 0 0 8px #fff3;
-          color: #fff4d9;
-        }
-        100% {
-          text-shadow: 0 0 20px var(--amber-glow);
-        }
+      @keyframes flashWhite {
+        0%   { color: #fff; text-shadow: 0 0 30px rgba(255,255,255,.8); }
+        100% { color: var(--amber); text-shadow: 0 0 22px var(--amber-glow); }
       }
       .tag-unit {
         font-family: var(--mono);
-        font-size: 14px;
+        font-size: 12px;
         color: var(--text-dim);
-        font-weight: 400;
       }
+
       .tag-foot {
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        margin-top: 16px;
-        padding-top: 12px;
-        border-top: 1px dashed var(--border-dim);
+        align-items: center;
         font-family: var(--mono);
-        font-size: 10px;
-        letter-spacing: 0.12em;
+        font-size: 9.5px;
         color: var(--text-mute);
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        gap: 8px;
       }
       .tag-quality {
-        color: var(--teal-dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+        min-width: 0;
       }
-      .tag-quality.bad {
-        color: var(--danger);
-      }
+      .tag-quality.bad { color: var(--danger); }
       .tag-writable-badge {
+        color: var(--teal);
+        border: 1px solid var(--teal-dim);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 8.5px;
+        letter-spacing: .14em;
+        flex-shrink: 0;
+      }
+
+      /* ==================================================
+         Chart panel
+         ================================================== */
+      .chart-panel {
+        background: var(--panel);
+        border: 1px solid var(--border-dim);
+        border-radius: 12px;
+        padding: clamp(12px, 2vw, 20px);
+        position: relative;
+        overflow: hidden;
+      }
+      .chart-panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(90,245,196,.03) 0%, transparent 50%);
+        pointer-events: none;
+      }
+
+      .chart-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .chart-chip {
+        font-family: var(--mono);
+        font-size: 10.5px;
+        letter-spacing: .08em;
+        color: var(--text-dim);
+        background: var(--bg-2);
+        border: 1px solid var(--border-dim);
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        user-select: none;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        color: var(--amber);
+        gap: 6px;
+        transition: all .15s var(--ease);
+        touch-action: manipulation;
       }
-      .tag-writable-badge::before {
-        content: "";
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: var(--amber);
-        box-shadow: 0 0 6px var(--amber-glow);
+      .chart-chip:hover { border-color: var(--teal-dim); color: var(--text); }
+      .chart-chip.active {
+        border-color: currentColor;
+        color: var(--chip-color, var(--teal));
+        background: rgba(90,245,196,.05);
+      }
+      .chart-chip .swatch {
+        width: 8px; height: 8px;
+        border-radius: 2px;
+        background: var(--chip-color, var(--teal-dim));
+        flex-shrink: 0;
       }
 
-      /* ==================================================
-         Footer info strip
-         ================================================== */
-      .bottom {
+      .chart-box {
         position: relative;
-        z-index: 2;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 18px 32px;
-        border-top: 1px solid var(--border);
-        font-family: var(--mono);
-        font-size: 11px;
-        color: var(--text-dim);
-        letter-spacing: 0.15em;
-        flex-wrap: wrap;
-        gap: 12px;
+        width: 100%;
+        height: 260px;
       }
-      .bottom a {
-        color: var(--teal-dim);
-        text-decoration: none;
-        border-bottom: 1px dashed transparent;
-        transition: border-bottom 0.2s;
-      }
-      .bottom a:hover {
-        border-bottom-color: var(--teal-dim);
-      }
+      @media (min-width: 700px)  { .chart-box { height: 320px; } }
+      @media (min-width: 1000px) { .chart-box { height: 380px; } }
 
       /* ==================================================
-         Modal di scrittura
+         Modal
          ================================================== */
       .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(3, 8, 7, 0.78);
+        background: rgba(7, 16, 15, .8);
         backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
         display: none;
-        align-items: center;
-        justify-content: center;
         z-index: 100;
         padding: 20px;
+        align-items: center;
+        justify-content: center;
       }
       .modal-backdrop.show {
         display: flex;
-        animation: modalFadeIn 0.2s var(--ease);
+        animation: fadeIn .2s var(--ease);
       }
-      @keyframes modalFadeIn {
-        from {
-          opacity: 0;
-        }
-        to {
-          opacity: 1;
-        }
-      }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
       .modal {
+        background: var(--panel-raised);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: clamp(18px, 4vw, 26px);
         width: 100%;
         max-width: 420px;
-        background: var(--panel);
-        border: 1px solid var(--border);
-        padding: 28px 28px 24px;
-        position: relative;
+        box-shadow: 0 0 0 1px var(--amber-glow), 0 30px 80px rgba(0,0,0,.6);
+        animation: slideUp .3s var(--ease);
       }
-      .modal::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          to right,
-          transparent,
-          var(--amber) 40%,
-          var(--amber) 60%,
-          transparent
-        );
+      @keyframes slideUp {
+        from { transform: translateY(10px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
       }
-      .modal-head {
+      .modal-title {
         font-family: var(--mono);
-        font-size: 11px;
-        letter-spacing: 0.24em;
+        font-size: 12px;
         color: var(--amber);
+        letter-spacing: .2em;
         text-transform: uppercase;
         margin-bottom: 6px;
       }
-      .modal-title {
-        font-family: var(--sans);
-        font-size: 20px;
-        font-weight: 700;
-        margin-bottom: 8px;
-      }
       .modal-desc {
-        font-family: var(--mono);
-        font-size: 12px;
+        font-family: var(--sans);
+        font-size: 13px;
         color: var(--text-dim);
-        line-height: 1.6;
-        margin-bottom: 20px;
+        margin-bottom: 18px;
+        line-height: 1.5;
       }
       .modal-input {
         width: 100%;
-        padding: 14px 16px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-        color: var(--amber);
         font-family: var(--mono);
-        font-size: 20px;
+        font-size: 22px;
+        color: var(--text);
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px 16px;
         outline: none;
-        transition: all 0.2s;
+        transition: border-color .2s;
+        margin-bottom: 16px;
       }
       .modal-input:focus {
-        border-color: var(--amber);
-        box-shadow: 0 0 0 3px var(--amber-glow);
+        border-color: var(--teal);
+        box-shadow: 0 0 0 3px rgba(90,245,196,.1);
       }
-      .modal-hint {
-        font-family: var(--mono);
-        font-size: 10px;
-        color: var(--text-mute);
-        letter-spacing: 0.16em;
-        margin-top: 6px;
-        text-transform: uppercase;
-      }
-      .modal-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 22px;
+      .modal-btns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
       }
       .btn {
-        flex: 1;
-        padding: 12px 18px;
         font-family: var(--mono);
         font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 0.18em;
+        letter-spacing: .14em;
         text-transform: uppercase;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--text-dim);
+        padding: 13px 18px;
+        border-radius: 8px;
         cursor: pointer;
-        transition: all 0.2s;
-      }
-      .btn:hover:not(:disabled) {
-        color: var(--text);
-        border-color: var(--teal-dim);
+        border: none;
+        transition: all .15s var(--ease);
+        touch-action: manipulation;
       }
       .btn-primary {
-        border-color: var(--amber);
-        color: var(--amber);
-        background: rgba(255, 180, 0, 0.06);
+        background: linear-gradient(135deg, var(--amber) 0%, #c47500 100%);
+        color: #10100a;
+        font-weight: 700;
+        box-shadow: 0 0 0 1px rgba(255,255,255,.15) inset, 0 8px 24px var(--amber-glow);
       }
-      .btn-primary:hover:not(:disabled) {
-        background: rgba(255, 180, 0, 0.14);
-        box-shadow: 0 0 14px var(--amber-glow);
+      .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
+      .btn-primary:active { transform: translateY(0); }
+      .btn-ghost {
+        background: transparent;
+        color: var(--text-dim);
+        border: 1px solid var(--border);
       }
-      .btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
+      .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
 
       /* ==================================================
          Toast
          ================================================== */
       .toast {
         position: fixed;
-        top: 32px;
-        right: 32px;
-        z-index: 200;
-        max-width: 400px;
-        padding: 14px 20px;
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-left: 3px solid var(--teal);
-        font-family: var(--mono);
-        font-size: 13px;
-        color: var(--text);
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+        transform: translate(-50%, 20px);
+        background: var(--panel-raised);
+        border: 1px solid var(--teal-dim);
+        border-radius: 10px;
+        padding: 12px 16px;
+        min-width: 260px;
+        max-width: calc(100vw - 32px);
         opacity: 0;
-        transform: translateX(24px);
-        transition: all 0.3s var(--ease);
         pointer-events: none;
+        transition: opacity .25s, transform .25s var(--ease);
+        z-index: 200;
+        box-shadow: 0 20px 50px rgba(0,0,0,.5);
       }
       .toast.show {
         opacity: 1;
-        transform: translateX(0);
+        transform: translate(-50%, 0);
       }
-      .toast.error {
-        border-left-color: var(--danger);
-      }
+      .toast.error { border-color: var(--danger); }
       .toast-title {
+        font-family: var(--mono);
         font-size: 10px;
-        letter-spacing: 0.22em;
         color: var(--teal);
+        letter-spacing: .2em;
         text-transform: uppercase;
-        margin-bottom: 4px;
+        margin-bottom: 3px;
       }
-      .toast.error .toast-title {
-        color: var(--danger);
+      .toast.error .toast-title { color: var(--danger); }
+      .toast-body {
+        font-family: var(--sans);
+        font-size: 13px;
+        color: var(--text);
+        line-height: 1.4;
       }
 
       /* ==================================================
-         Responsive
+         Footer
          ================================================== */
-      @media (max-width: 720px) {
-        .topbar {
-          padding: 16px 18px;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 14px;
-        }
-        .meta {
-          gap: 18px;
-        }
-        .main {
-          padding: 28px 18px 60px;
-        }
-        .tag-value {
-          font-size: 26px;
-        }
-        .toast {
-          top: 16px;
-          right: 16px;
-          left: 16px;
-          max-width: none;
+      footer {
+        margin-top: 40px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border-dim);
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--text-mute);
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        text-align: center;
+        line-height: 1.8;
+      }
+      footer a { color: var(--teal-dim); text-decoration: none; }
+      footer a:hover { color: var(--teal); }
+
+      /* ==================================================
+         Accessibility / utility
+         ================================================== */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: .001ms !important;
+          transition-duration: .001ms !important;
         }
       }
     </style>
   </head>
 
   <body>
-    <div class="grain"></div>
-
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo-mark">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
+    <div class="wrap">
+      <!-- ============================================== -->
+      <!--  HEADER                                         -->
+      <!-- ============================================== -->
+      <header>
+        <div class="brand">
+          <div class="brand-mark">S7</div>
+          <div class="brand-text">
+            <div class="brand-title">S7-1200 G2 · HMI Gateway</div>
+            <div class="brand-sub">Public MQTT · Remote Terminal</div>
+          </div>
         </div>
-        <div class="brand-text">
-          <span class="brand-title">HMI · PUBLIC GATEWAY</span>
-          <span class="brand-sub">SIEMENS · S7-1200 G2 · via MQTT</span>
+        <div class="header-right">
+          <div class="clock" id="clock">--:--:--</div>
+        </div>
+      </header>
+
+      <!-- ============================================== -->
+      <!--  STATUS BAR                                     -->
+      <!-- ============================================== -->
+      <div class="status-bar">
+        <div class="status-cell">
+          <span class="dot" id="statusDot"></span>
+          <div style="min-width:0;">
+            <div class="label">Broker MQTT</div>
+            <div class="value" id="statusLabel">—</div>
+          </div>
+        </div>
+        <div class="status-cell">
+          <span class="dot" id="plcDot"></span>
+          <div style="min-width:0;">
+            <div class="label">PLC Link</div>
+            <div class="value" id="plcLabel">—</div>
+          </div>
+        </div>
+        <div class="status-cell">
+          <div style="min-width:0;">
+            <div class="label">Tag attivi</div>
+            <div class="value"><span id="tagCount">0</span></div>
+          </div>
+        </div>
+        <div class="status-cell">
+          <div style="min-width:0;">
+            <div class="label">Last update</div>
+            <div class="value dim" id="lastUpdate">—</div>
+          </div>
         </div>
       </div>
 
-      <div class="meta">
-        <div class="meta-item">
-          <span class="meta-label">BROKER</span>
-          <span class="meta-value" id="brokerHost">—</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">TAGS</span>
-          <span class="meta-value" id="tagCount">0</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-label">LAST UPDATE</span>
-          <span class="meta-value" id="lastUpdate">—</span>
-        </div>
-        <div class="meta-item status">
-          <span class="status-dot warn" id="statusDot"></span>
-          <span class="meta-value" id="statusLabel">CONNECTING</span>
-        </div>
-      </div>
-    </header>
-
-    <main class="main">
-      <section class="section">
+      <!-- ============================================== -->
+      <!--  SEZIONE LIVE VALUES                            -->
+      <!-- ============================================== -->
+      <div class="section">
         <div class="section-head">
-          <span class="bracket">[</span>
-          <span class="section-title">Live Channels</span>
-          <span class="bracket">]</span>
-          <span class="section-dash"></span>
-          <span class="section-hint" id="sectionHint">awaiting data…</span>
+          <div class="section-title">Live Values</div>
+          <div class="section-hint" id="sectionHint">awaiting broker</div>
         </div>
-        <div class="tag-grid" id="tagGrid">
-          <!-- Le card dei tag vengono create da JS -->
+        <div class="tag-grid" id="tagGrid"></div>
+      </div>
+
+      <!-- ============================================== -->
+      <!--  SEZIONE TREND                                  -->
+      <!-- ============================================== -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Trend live</div>
+          <div class="section-hint">
+            buffer <span id="bufLen">0</span>/120 punti · tap per togliere/mettere una traccia
+          </div>
         </div>
-      </section>
-    </main>
+        <div class="chart-panel">
+          <div class="chart-toolbar" id="chartToolbar"></div>
+          <div class="chart-box">
+            <canvas id="chart"></canvas>
+          </div>
+        </div>
+      </div>
 
-    <footer class="bottom">
-      <span>ECOENERG · Public HMI · S7-1200 G2</span>
-      <span>
-        Data flow:
-        <a href="https://hivemq.com" target="_blank" rel="noopener"
-          >HiveMQ Cloud</a
-        >
-        · MQTT over WSS/TLS
-      </span>
-      <span id="clock">--:--:--</span>
-    </footer>
-
-    <!-- Toast feedback -->
-    <div id="toast" class="toast">
-      <div class="toast-title" id="toastTitle">STATUS</div>
-      <div id="toastBody">—</div>
+      <footer>
+        <div>Gateway pubblico via HiveMQ Cloud · WSS over TLS</div>
+        <div><span id="brokerHost">—</span> · <span id="protoLabel">MQTT 3.1.1</span></div>
+      </footer>
     </div>
 
-    <!-- Modal scrittura -->
+    <!-- ============================================== -->
+    <!--  MODAL SCRITTURA                                 -->
+    <!-- ============================================== -->
     <div class="modal-backdrop" id="modalBackdrop">
       <div class="modal">
-        <div class="modal-head" id="modalHead">WRITE TAG</div>
-        <div class="modal-title" id="modalTitle">—</div>
-        <div class="modal-desc" id="modalDesc">
-          Inserisci il nuovo valore da inviare al PLC.
-        </div>
+        <div class="modal-title" id="modalTitle">Scrittura</div>
+        <div class="modal-desc" id="modalDesc"></div>
         <input
-          type="text"
-          id="modalInput"
           class="modal-input"
-          placeholder="0"
+          id="modalInput"
+          placeholder="Valore..."
           autocomplete="off"
+          inputmode="decimal"
         />
-        <div class="modal-hint" id="modalHint">ENTER per confermare · ESC per annullare</div>
-        <div class="modal-actions">
-          <button class="btn" id="btnCancel">Annulla</button>
+        <div class="modal-btns">
+          <button class="btn btn-ghost" id="btnCancel">Annulla</button>
           <button class="btn btn-primary" id="btnSend">Scrivi al PLC</button>
         </div>
       </div>
     </div>
 
+    <!-- ============================================== -->
+    <!--  TOAST                                           -->
+    <!-- ============================================== -->
+    <div class="toast" id="toast">
+      <div class="toast-title" id="toastTitle">Info</div>
+      <div class="toast-body" id="toastBody"></div>
+    </div>
+
+    <!-- ================================================ -->
+    <!--  SCRIPT                                           -->
+    <!-- ================================================ -->
     <script>
       // ====================================================
-      //  CONFIG
+      //  CONFIG — modificare qui per adattare il progetto
       // ====================================================
       const CONFIG = {
         broker: {
-          // URL WSS del cluster HiveMQ Cloud
+          // HiveMQ Cloud cluster — porta 8884 = MQTT over WSS
           url: "wss://df33f6dacc0c4c4a9d1e850d1f9837b5.s1.eu.hivemq.cloud:8884/mqtt",
           username: "web-viewer",
           // ⚠️ password visibile a chiunque apra il repo. L'utente
@@ -764,17 +800,33 @@
           { name: "Static_4", label: "Static 4", unit: "", writable: true },
           { name: "Static_5", label: "Static 5", unit: "", writable: true },
         ],
+
+        // Trend chart
+        chart: {
+          maxPoints: 120,  // ≈ 2 min a 1 aggiornamento/sec
+          // quali tag sono attivi all'avvio (max 4 consigliato)
+          defaultActive: ["Static_1", "Static_2"],
+        },
       };
+
+      // Palette grafico (CSS var --c1..--c8)
+      const CHART_COLORS = [
+        "#5af5c4", "#ffb400", "#7aa9ff", "#ff7ac6",
+        "#c6ff5a", "#ff9c6e", "#a5f3fc", "#e9b8ff",
+      ];
 
       // ====================================================
       //  Stato globale
       // ====================================================
       const state = {
-        cards: {}, // name -> {elValue, elFoot, elQuality, label, unit, writable}
-        lastValues: {}, // name -> ultimo messaggio completo
-        pendingWrites: {}, // reqId -> {name, onAck}
+        cards: {},         // name -> {elValue, elFoot, elQuality, def}
+        lastValues: {},    // name -> ultimo messaggio
+        pendingWrites: {}, // reqId -> {name, timeout}
         plcConnected: null,
         client: null,
+        chart: null,
+        datasets: {},      // name -> { dataset, active, color, chipEl }
+        history: {},       // name -> [{t: ms, v: number}]
       };
 
       // ====================================================
@@ -787,6 +839,19 @@
         dot.classList.remove("online", "offline", "warn");
         if (state_) dot.classList.add(state_);
         $("statusLabel").textContent = label;
+      }
+      function setPlcStatus(connected) {
+        const dot = $("plcDot");
+        dot.classList.remove("online", "offline", "warn");
+        if (connected === true) {
+          dot.classList.add("online");
+          $("plcLabel").textContent = "ONLINE";
+        } else if (connected === false) {
+          dot.classList.add("offline");
+          $("plcLabel").textContent = "OFFLINE";
+        } else {
+          $("plcLabel").textContent = "—";
+        }
       }
 
       function showToast(title, body, isError = false) {
@@ -803,14 +868,11 @@
         if (v === null || v === undefined) return "—";
         if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
         if (typeof v === "number") {
-          // Se ha tanti decimali (tipico dei Float dal PLC),
-          // tronchiamo ragionevolmente
           if (!Number.isInteger(v)) return v.toFixed(2);
           return String(v);
         }
         return String(v);
       }
-
       function fmtTime(iso) {
         if (!iso) return "—";
         const d = new Date(iso);
@@ -818,17 +880,14 @@
       }
 
       // ====================================================
-      //  Creazione card
+      //  Card tag
       // ====================================================
-      function ensureCard(name, meta = {}) {
+      function ensureCard(name) {
         if (state.cards[name]) return state.cards[name];
 
         const def =
           CONFIG.tags.find((t) => t.name === name) || {
-            name,
-            label: meta.label || name,
-            unit: meta.unit || "",
-            writable: false,
+            name, label: name, unit: "", writable: false,
           };
 
         const card = document.createElement("div");
@@ -874,12 +933,11 @@
         ref.elValue.classList.remove("pending");
         ref.elValue.textContent = formatted;
 
-        // flash animation
+        // flash
         ref.elValue.classList.remove("flash");
-        void ref.elValue.offsetWidth; // retrigger
+        void ref.elValue.offsetWidth;
         ref.elValue.classList.add("flash");
 
-        // quality
         const good = msg.quality && msg.quality.startsWith("Good");
         ref.elQuality.textContent = good
           ? `${fmtTime(msg.timestamp)} · OK`
@@ -887,12 +945,215 @@
         ref.elQuality.classList.toggle("bad", !good);
 
         $("lastUpdate").textContent = fmtTime(msg.timestamp);
-
         state.lastValues[msg.name] = msg;
+
+        // → spinge nel grafico (solo se numerico)
+        if (typeof msg.value === "number") {
+          pushChartPoint(msg.name, msg.timestamp, msg.value);
+        }
       }
 
-      // Pre-costruisci le card dalla config (prima ancora dei dati)
+      // Pre-costruisci le card dalla config
       CONFIG.tags.forEach((t) => ensureCard(t.name));
+
+      // ====================================================
+      //  Chart (Chart.js v4) — live streaming
+      // ====================================================
+      function initChart() {
+        const ctx = $("chart").getContext("2d");
+
+        // costruisci dataset per ogni tag di config (+ eventuali extra dopo)
+        CONFIG.tags.forEach((t, i) => {
+          const color = CHART_COLORS[i % CHART_COLORS.length];
+          const active = CONFIG.chart.defaultActive.includes(t.name);
+
+          state.datasets[t.name] = {
+            dataset: {
+              label: t.label,
+              data: [],
+              borderColor: color,
+              backgroundColor: color + "20",
+              borderWidth: 1.8,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.25,
+              spanGaps: true,
+              hidden: !active,
+            },
+            color,
+            active,
+          };
+          state.history[t.name] = [];
+        });
+
+        state.chart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: CONFIG.tags.map((t) => state.datasets[t.name].dataset),
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: "nearest", intersect: false, axis: "x" },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "#0f201e",
+                borderColor: "#1e3a36",
+                borderWidth: 1,
+                titleFont: { family: "JetBrains Mono", size: 11 },
+                bodyFont: { family: "JetBrains Mono", size: 12 },
+                titleColor: "#ffb400",
+                bodyColor: "#d7e4e1",
+                padding: 10,
+                cornerRadius: 6,
+                displayColors: true,
+                boxPadding: 4,
+                callbacks: {
+                  title: (items) => items[0]?.label || "",
+                  label: (item) => `  ${item.dataset.label}: ${formatValue(item.parsed.y)}`,
+                },
+              },
+            },
+            scales: {
+              x: {
+                ticks: {
+                  color: "#6e8582",
+                  font: { family: "JetBrains Mono", size: 9 },
+                  maxRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 6,
+                },
+                grid: { color: "rgba(30,58,54,.4)", drawTicks: false },
+                border: { color: "#1e3a36" },
+              },
+              y: {
+                ticks: {
+                  color: "#6e8582",
+                  font: { family: "JetBrains Mono", size: 10 },
+                },
+                grid: { color: "rgba(30,58,54,.4)", drawTicks: false },
+                border: { color: "#1e3a36" },
+              },
+            },
+          },
+        });
+
+        buildChartToolbar();
+      }
+
+      function buildChartToolbar() {
+        const bar = $("chartToolbar");
+        bar.innerHTML = "";
+        CONFIG.tags.forEach((t) => {
+          const d = state.datasets[t.name];
+          const chip = document.createElement("span");
+          chip.className = "chart-chip" + (d.active ? " active" : "");
+          chip.style.setProperty("--chip-color", d.color);
+          chip.innerHTML = `<span class="swatch"></span><span>${t.label}</span>`;
+          chip.addEventListener("click", () => toggleSeries(t.name, chip));
+          bar.appendChild(chip);
+          d.chipEl = chip;
+        });
+      }
+
+      function toggleSeries(name, chipEl) {
+        const d = state.datasets[name];
+        if (!d) return;
+        d.active = !d.active;
+        d.dataset.hidden = !d.active;
+        chipEl.classList.toggle("active", d.active);
+        state.chart.update("none");
+      }
+
+      function pushChartPoint(name, iso, value) {
+        const d = state.datasets[name];
+        if (!d) {
+          // tag non previsto in config: creane uno on-the-fly
+          const i = Object.keys(state.datasets).length;
+          const color = CHART_COLORS[i % CHART_COLORS.length];
+          state.datasets[name] = {
+            dataset: {
+              label: name,
+              data: [],
+              borderColor: color,
+              backgroundColor: color + "20",
+              borderWidth: 1.8,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.25,
+              spanGaps: true,
+              hidden: false,
+            },
+            color,
+            active: true,
+          };
+          state.history[name] = [];
+          if (state.chart) {
+            state.chart.data.datasets.push(state.datasets[name].dataset);
+            // aggiungi anche un chip alla toolbar
+            const chip = document.createElement("span");
+            chip.className = "chart-chip active";
+            chip.style.setProperty("--chip-color", color);
+            chip.innerHTML = `<span class="swatch"></span><span>${name}</span>`;
+            chip.addEventListener("click", () => toggleSeries(name, chip));
+            $("chartToolbar").appendChild(chip);
+            state.datasets[name].chipEl = chip;
+          }
+          return pushChartPoint(name, iso, value);
+        }
+
+        const t = iso ? new Date(iso).getTime() : Date.now();
+        const hist = state.history[name];
+        hist.push({ t, v: value });
+
+        // trim history
+        const max = CONFIG.chart.maxPoints;
+        if (hist.length > max) hist.splice(0, hist.length - max);
+
+        // riallinea anche gli altri history per non avere code sballate
+        // (uso il più lungo come asse comune)
+        redrawChart();
+      }
+
+      // Ricostruisce labels + datasets dall'history.
+      // Strategia: prendo l'unione ordinata dei timestamp di tutti i dataset
+      // attivi e proietto ogni serie su quell'asse; i "buchi" vanno a null
+      // (spanGaps: true li unisce).
+      function redrawChart() {
+        if (!state.chart) return;
+
+        // Unione timestamp
+        const allT = new Set();
+        for (const name of Object.keys(state.history)) {
+          state.history[name].forEach((p) => allT.add(p.t));
+        }
+        const ts = [...allT].sort((a, b) => a - b);
+        const max = CONFIG.chart.maxPoints;
+        const tsTrimmed = ts.slice(-max);
+
+        // Labels (HH:MM:SS)
+        state.chart.data.labels = tsTrimmed.map((t) =>
+          new Date(t).toLocaleTimeString("it-IT", { hour12: false })
+        );
+
+        // Riempi ogni dataset con i valori allineati ai timestamp
+        for (const name of Object.keys(state.datasets)) {
+          const d = state.datasets[name];
+          const hist = state.history[name] || [];
+          const byT = new Map(hist.map((p) => [p.t, p.v]));
+          d.dataset.data = tsTrimmed.map((t) =>
+            byT.has(t) ? byT.get(t) : null
+          );
+        }
+
+        $("bufLen").textContent = tsTrimmed.length;
+        state.chart.update("none");
+      }
+
+      initChart();
 
       // ====================================================
       //  Modal di scrittura
@@ -903,7 +1164,8 @@
         currentWriteTarget = def;
         $("modalTitle").textContent = def.label + "  (" + def.name + ")";
         const lastVal = state.lastValues[def.name]?.value;
-        $("modalDesc").textContent = `Valore attuale: ${formatValue(lastVal)}. Inserisci il nuovo valore da scrivere al PLC.`;
+        $("modalDesc").textContent =
+          `Valore attuale: ${formatValue(lastVal)}. Inserisci il nuovo valore da scrivere al PLC.`;
         $("modalInput").value = "";
         $("modalInput").placeholder = formatValue(lastVal);
         $("modalBackdrop").classList.add("show");
@@ -923,26 +1185,20 @@
           return;
         }
 
-        // Cast al tipo più sensato (numero o stringa)
+        // Cast al tipo più sensato
         let value = raw;
-        if (!isNaN(parseFloat(raw)) && isFinite(raw)) {
-          value = parseFloat(raw);
-        } else if (raw.toLowerCase() === "true") value = true;
+        if (!isNaN(parseFloat(raw)) && isFinite(raw)) value = parseFloat(raw);
+        else if (raw.toLowerCase() === "true") value = true;
         else if (raw.toLowerCase() === "false") value = false;
 
-        // IMPORTANTE: catturo i dati del target in variabili locali *prima*
-        // del publish, perché closeModal() azzera currentWriteTarget in modo
-        // sincrono e il callback di publish() si risveglia dopo il PUBACK,
-        // quando currentWriteTarget è già null. Se il callback leggesse
-        // currentWriteTarget.name direttamente → TypeError → mqtt.js crasha
-        // in modo non catturato e il client smette di ricevere messaggi
-        // (sintomo: la pagina si congela finché non fai F5).
+        // SNAPSHOT dei dati del target: il callback di publish() si risveglia
+        // dopo closeModal() → currentWriteTarget = null. Senza snapshot
+        // crasha con TypeError dentro mqtt.min.js e il client si blocca.
         const targetName = currentWriteTarget.name;
         const sentValue = value;
 
         const reqId =
           "w-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
-
         const payload = JSON.stringify({ value, reqId });
         const topic = `${CONFIG.topicPrefix}/cmd/${targetName}`;
 
@@ -964,8 +1220,6 @@
         state.client.publish(topic, payload, { qos: 1 }, (err) => {
           if (err) {
             showToast("Scrittura", "Publish fallito: " + err.message, true);
-            // Pure qui: il pendingWrites potrebbe essere già stato cancellato
-            // dal timeout, quindi accedere a .timeout senza controllo crasha.
             const p = state.pendingWrites[reqId];
             if (p) {
               clearTimeout(p.timeout);
@@ -973,10 +1227,7 @@
             }
             return;
           }
-          showToast(
-            "Scrittura",
-            `Comando inviato: ${targetName} = ${sentValue}`
-          );
+          showToast("Scrittura", `Comando inviato: ${targetName} = ${sentValue}`);
         });
 
         closeModal();
@@ -992,10 +1243,7 @@
         else if (e.key === "Escape") closeModal();
       });
       document.addEventListener("keydown", (e) => {
-        if (
-          e.key === "Escape" &&
-          $("modalBackdrop").classList.contains("show")
-        )
+        if (e.key === "Escape" && $("modalBackdrop").classList.contains("show"))
           closeModal();
       });
 
@@ -1008,8 +1256,7 @@
 
         setBrokerStatus("warn", "CONNECTING");
 
-        const clientId =
-          "web-hmi-" + Math.random().toString(16).slice(2, 10);
+        const clientId = "web-hmi-" + Math.random().toString(16).slice(2, 10);
 
         state.client = mqtt.connect(CONFIG.broker.url, {
           username: CONFIG.broker.username,
@@ -1032,14 +1279,8 @@
           state.client.subscribe(`${prefix}/ack/+`, { qos: 1 });
         });
 
-        state.client.on("reconnect", () => {
-          setBrokerStatus("warn", "RECONNECTING");
-        });
-
-        state.client.on("offline", () => {
-          setBrokerStatus("offline", "OFFLINE");
-        });
-
+        state.client.on("reconnect", () => setBrokerStatus("warn", "RECONNECTING"));
+        state.client.on("offline", () => setBrokerStatus("offline", "OFFLINE"));
         state.client.on("error", (err) => {
           console.error("MQTT error", err);
           setBrokerStatus("offline", "ERROR");
@@ -1055,7 +1296,6 @@
             console.warn("[MQTT rx] JSON invalid on", topic, payload.toString());
             return;
           }
-          console.log("[MQTT rx]", topic, s);
 
           // hmi/siemens/tag/<name>
           if (topic.startsWith(`${prefix}/tag/`)) {
@@ -1067,6 +1307,7 @@
           // hmi/siemens/status
           if (topic === `${prefix}/status`) {
             state.plcConnected = s.connected;
+            setPlcStatus(s.connected);
             if (s.connected) {
               $("sectionHint").textContent = "PLC online · live stream";
             } else {
@@ -1088,17 +1329,12 @@
             if (s.ok) {
               showToast("PLC ack", `${name} scritto: ${s.value}`);
             } else {
-              showToast(
-                "PLC ack",
-                `${name} rifiutato: ${s.error || "?"}`,
-                true
-              );
+              showToast("PLC ack", `${name} rifiutato: ${s.error || "?"}`, true);
             }
             return;
           }
         });
       }
-
       connectMqtt();
 
       // ====================================================
@@ -1106,9 +1342,7 @@
       // ====================================================
       function updateClock() {
         const now = new Date();
-        $("clock").textContent = now.toLocaleTimeString("it-IT", {
-          hour12: false,
-        });
+        $("clock").textContent = now.toLocaleTimeString("it-IT", { hour12: false });
       }
       updateClock();
       setInterval(updateClock, 1000);
