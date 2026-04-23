@@ -650,6 +650,160 @@
       footer a:hover { color: var(--teal); }
 
       /* ==================================================
+         Widget industriali (tank / thermometer / gauge)
+         ================================================== */
+      .widget-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      @media (min-width: 560px) {
+        .widget-grid {
+          grid-template-columns: repeat(2, 1fr);
+          gap: 14px;
+        }
+      }
+      @media (min-width: 900px) {
+        .widget-grid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+
+      .widget-card {
+        background: var(--panel);
+        border: 1px solid var(--border-dim);
+        border-radius: 12px;
+        padding: 16px 14px 14px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: border-color .3s var(--ease), transform .2s var(--ease);
+        min-width: 0;
+      }
+      .widget-card:hover {
+        border-color: var(--teal-dim);
+        transform: translateY(-1px);
+      }
+      .widget-card:active {
+        transform: translateY(0);
+      }
+      .widget-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(90,184,255,.04) 0%, transparent 60%);
+        pointer-events: none;
+      }
+
+      .widget-head {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+      }
+      .widget-name {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--teal-dim);
+        letter-spacing: .18em;
+        text-transform: uppercase;
+      }
+      .widget-label {
+        font-family: var(--sans);
+        font-size: 12px;
+        color: var(--text-dim);
+        text-align: center;
+        width: 100%;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .widget-svg {
+        width: auto;
+        max-width: 100%;
+        height: 210px;
+        display: block;
+      }
+      .widget-thermo .widget-svg { max-width: 80px; }
+      .widget-gauge  .widget-svg { height: 150px; width: 100%; max-width: 240px; }
+
+      .widget-value-row {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        margin-top: 6px;
+      }
+      .widget-value {
+        font-family: var(--mono);
+        font-size: clamp(22px, 5vw, 28px);
+        font-weight: 500;
+        color: var(--amber);
+        letter-spacing: .02em;
+        text-shadow: 0 0 20px var(--amber-glow);
+        line-height: 1;
+        transition: color .2s, text-shadow .2s;
+      }
+      .widget-value.pending {
+        color: var(--text-mute);
+        text-shadow: none;
+      }
+      .widget-value.flash {
+        animation: flashWhite .5s var(--ease);
+      }
+      .widget-unit {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .widget-foot {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--text-mute);
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin-top: 4px;
+      }
+      .widget-quality {
+        text-align: center;
+        flex: 1;
+      }
+      .widget-quality.bad { color: var(--danger); }
+
+      /* Animazioni SVG interne */
+      .tank-liquid,
+      .mercury-col {
+        transform-box: fill-box;
+        transform-origin: bottom;
+        transform: scaleY(0);
+        transition: transform .8s var(--ease);
+      }
+      .gauge-fill {
+        transition: stroke-dashoffset .7s var(--ease);
+      }
+      .gauge-needle {
+        transform: rotate(-90deg);
+        transition: transform .7s var(--ease);
+      }
+
+      /* Wave animata sul pelo libero del serbatoio */
+      @keyframes tankShimmer {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+      }
+      .tank-top {
+        animation: tankShimmer 2.5s ease-in-out infinite;
+      }
+
+      /* ==================================================
          Accessibility / utility
          ================================================== */
       @media (prefers-reduced-motion: reduce) {
@@ -720,6 +874,17 @@
           <div class="section-hint" id="sectionHint">awaiting broker</div>
         </div>
         <div class="tag-grid" id="tagGrid"></div>
+      </div>
+
+      <!-- ============================================== -->
+      <!--  SEZIONE INDICATORI (tank / thermo / gauge)     -->
+      <!-- ============================================== -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Indicatori</div>
+          <div class="section-hint">widget dinamici · tap per scrivere</div>
+        </div>
+        <div class="widget-grid" id="widgetGrid"></div>
       </div>
 
       <!-- ============================================== -->
@@ -799,9 +964,16 @@
         tags: [
           { name: "Static_1", label: "Static 1", unit: "", writable: true },
           { name: "Static_2", label: "Static 2", unit: "", writable: true },
-          { name: "Static_3", label: "Static 3", unit: "", writable: true },
-          { name: "Static_4", label: "Static 4", unit: "", writable: true },
-          { name: "Static_5", label: "Static 5", unit: "", writable: true },
+          // Widget: serbatoio (livello %). Range = 0..100 → 100 = pieno.
+          { name: "Static_3", label: "Livello serbatoio", unit: "%",
+            writable: true, widget: "tank", min: 0, max: 100 },
+          // Widget: termometro. Range = 0..100 °C.
+          { name: "Static_4", label: "Temperatura", unit: "°C",
+            writable: true, widget: "thermo", min: 0, max: 100 },
+          // Widget: tachimetro. Range = 0..100 (tipo percentuale carico).
+          // Per rpm reali alza il max (es. 3000).
+          { name: "Static_5", label: "Velocità", unit: "%",
+            writable: true, widget: "gauge", min: 0, max: 100 },
         ],
 
         // Trend chart
@@ -929,26 +1101,237 @@
         return ref;
       }
 
+      // ====================================================
+      //  Widget industriali (tank / thermo / gauge)
+      // ====================================================
+      function tankSvg(uid) {
+        return `
+          <svg class="widget-svg" viewBox="0 0 160 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="tank-grad-${uid}" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%"  stop-color="#7de3ff" stop-opacity="0.95"/>
+                <stop offset="100%" stop-color="#2e7fc4" stop-opacity="0.85"/>
+              </linearGradient>
+            </defs>
+            <!-- Corpo cilindrico -->
+            <rect x="35" y="25" width="90" height="210" rx="10"
+                  fill="var(--bg-2)" stroke="var(--teal-dim)" stroke-width="1.5"/>
+            <!-- Liquido (scaleY da 0 a 1 via CSS) -->
+            <rect class="tank-liquid" x="36" y="26" width="88" height="208" rx="9"
+                  fill="url(#tank-grad-${uid})"/>
+            <!-- Ellisse superiore 3D -->
+            <ellipse cx="80" cy="25" rx="45" ry="6"
+                     fill="var(--panel-raised)" stroke="var(--teal-dim)" stroke-width="1.5"/>
+            <!-- Tacche percentuali -->
+            <g stroke="var(--text-mute)" stroke-width="1">
+              <line x1="126" y1="67"  x2="132" y2="67"/>
+              <line x1="126" y1="130" x2="132" y2="130"/>
+              <line x1="126" y1="193" x2="132" y2="193"/>
+            </g>
+            <g font-family="JetBrains Mono" font-size="8" fill="var(--text-mute)" letter-spacing="1">
+              <text x="135" y="71">75</text>
+              <text x="135" y="134">50</text>
+              <text x="135" y="197">25</text>
+            </g>
+          </svg>
+        `;
+      }
+
+      function thermoSvg(uid) {
+        return `
+          <svg class="widget-svg" viewBox="0 0 80 280" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="thermo-grad-${uid}" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%"  stop-color="#ffb400"/>
+                <stop offset="100%" stop-color="#ff5a6a"/>
+              </linearGradient>
+            </defs>
+            <!-- Tubo -->
+            <rect x="33" y="20" width="14" height="210" rx="7"
+                  fill="var(--bg-2)" stroke="var(--teal-dim)" stroke-width="1.5"/>
+            <!-- Bulbo esterno -->
+            <circle cx="40" cy="240" r="22"
+                    fill="var(--bg-2)" stroke="var(--teal-dim)" stroke-width="1.5"/>
+            <!-- Bulbo pieno (sempre) -->
+            <circle cx="40" cy="240" r="17" fill="url(#thermo-grad-${uid})"/>
+            <!-- Colonna mercurio — scaleY da 0 a 1 -->
+            <rect class="mercury-col" x="35" y="22" width="10" height="208" rx="5"
+                  fill="url(#thermo-grad-${uid})"/>
+            <!-- Tacche graduate -->
+            <g stroke="var(--text-mute)" stroke-width="1">
+              <line x1="50" y1="40"  x2="56" y2="40"/>
+              <line x1="50" y1="80"  x2="56" y2="80"/>
+              <line x1="50" y1="120" x2="56" y2="120"/>
+              <line x1="50" y1="160" x2="56" y2="160"/>
+              <line x1="50" y1="200" x2="56" y2="200"/>
+            </g>
+          </svg>
+        `;
+      }
+
+      function gaugeSvg(uid) {
+        // Raggio 80, centro (110,130). Circonferenza semicerchio ≈ 251.33
+        return `
+          <svg class="widget-svg" viewBox="0 0 220 160" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gauge-grad-${uid}" x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%"  stop-color="#5ab8ff"/>
+                <stop offset="55%" stop-color="#ffb400"/>
+                <stop offset="100%" stop-color="#ff5a6a"/>
+              </linearGradient>
+            </defs>
+            <!-- Traccia arco (di fondo) -->
+            <path d="M 30 130 A 80 80 0 0 1 190 130"
+                  fill="none" stroke="var(--border)" stroke-width="10"
+                  stroke-linecap="round"/>
+            <!-- Arco valore (stroke-dashoffset animato) -->
+            <path class="gauge-fill" d="M 30 130 A 80 80 0 0 1 190 130"
+                  fill="none" stroke="url(#gauge-grad-${uid})" stroke-width="10"
+                  stroke-linecap="round"
+                  stroke-dasharray="251.33" stroke-dashoffset="251.33"/>
+            <!-- Tacche -->
+            <g stroke="var(--text-mute)" stroke-width="1">
+              <line x1="30"  y1="130" x2="30"  y2="140"/>
+              <line x1="110" y1="50"  x2="110" y2="40"/>
+              <line x1="190" y1="130" x2="190" y2="140"/>
+            </g>
+            <g font-family="JetBrains Mono" font-size="9" fill="var(--text-mute)" text-anchor="middle">
+              <text x="28"  y="152">MIN</text>
+              <text x="110" y="34">½</text>
+              <text x="192" y="152">MAX</text>
+            </g>
+            <!-- Lancetta (pivot centrato in 110,130) -->
+            <g transform="translate(110 130)">
+              <g class="gauge-needle">
+                <line x1="0" y1="0" x2="0" y2="-72"
+                      stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>
+                <circle cx="0" cy="0" r="10" fill="var(--amber)"/>
+                <circle cx="0" cy="0" r="4"  fill="var(--bg)"/>
+              </g>
+            </g>
+          </svg>
+        `;
+      }
+
+      function ensureWidget(name) {
+        if (state.cards[name]) return state.cards[name];
+        const def = CONFIG.tags.find((t) => t.name === name);
+        if (!def || !def.widget) return ensureCard(name);
+
+        const min = def.min ?? 0;
+        const max = def.max ?? 1000;
+
+        const card = document.createElement("div");
+        card.className = "widget-card widget-" + def.widget + (def.writable ? " writable" : "");
+
+        let svgHtml = "";
+        if (def.widget === "tank") svgHtml = tankSvg(name);
+        else if (def.widget === "thermo") svgHtml = thermoSvg(name);
+        else if (def.widget === "gauge") svgHtml = gaugeSvg(name);
+
+        card.innerHTML = `
+          <div class="widget-head">
+            <span class="widget-name">${def.name}</span>
+            ${def.writable
+              ? '<span class="tag-writable-badge">RW</span>'
+              : '<span style="color:var(--text-mute);font-size:8.5px;letter-spacing:.14em;">RO</span>'}
+          </div>
+          <div class="widget-label">${def.label}</div>
+          ${svgHtml}
+          <div class="widget-value-row">
+            <span class="widget-value pending" data-value>—</span>
+            <span class="widget-unit">${def.unit || ""}</span>
+          </div>
+          <div class="widget-foot">
+            <span>${min}${def.unit || ""}</span>
+            <span class="widget-quality">awaiting</span>
+            <span>${max}${def.unit || ""}</span>
+          </div>
+        `;
+
+        if (def.writable) {
+          card.addEventListener("click", () => openWriteModal(def));
+        }
+
+        $("widgetGrid").appendChild(card);
+
+        const ref = {
+          card,
+          elValue: card.querySelector("[data-value]"),
+          elQuality: card.querySelector(".widget-quality"),
+          def,
+          widget: def.widget,
+          min,
+          max,
+        };
+
+        if (def.widget === "tank") {
+          ref.liquidEl = card.querySelector(".tank-liquid");
+        } else if (def.widget === "thermo") {
+          ref.mercuryEl = card.querySelector(".mercury-col");
+        } else if (def.widget === "gauge") {
+          ref.fillEl = card.querySelector(".gauge-fill");
+          ref.needleEl = card.querySelector(".gauge-needle");
+        }
+
+        state.cards[name] = ref;
+        $("tagCount").textContent = Object.keys(state.cards).length;
+        return ref;
+      }
+
+      function updateWidget(ref, value) {
+        if (typeof value !== "number") return;
+        const span = Math.max(1e-9, ref.max - ref.min);
+        const pct = Math.max(0, Math.min(1, (value - ref.min) / span));
+
+        if (ref.widget === "tank" && ref.liquidEl) {
+          ref.liquidEl.style.transform = `scaleY(${pct})`;
+        } else if (ref.widget === "thermo" && ref.mercuryEl) {
+          ref.mercuryEl.style.transform = `scaleY(${pct})`;
+        } else if (ref.widget === "gauge" && ref.fillEl && ref.needleEl) {
+          const circ = 251.33;
+          ref.fillEl.style.strokeDashoffset = (circ * (1 - pct)).toFixed(2);
+          ref.needleEl.style.transform = `rotate(${(pct * 180 - 90).toFixed(2)}deg)`;
+        }
+      }
+
+      // Dispatcher: card numerica oppure widget, in base a CONFIG.tags[n].widget
+      function ensureAny(tagOrName) {
+        const name = typeof tagOrName === "string" ? tagOrName : tagOrName.name;
+        const def = CONFIG.tags.find((t) => t.name === name);
+        if (def && def.widget) return ensureWidget(name);
+        return ensureCard(name);
+      }
+
+      // ====================================================
+      //  Render di un aggiornamento tag (card o widget)
+      // ====================================================
       function renderTagUpdate(msg) {
-        const ref = ensureCard(msg.name);
+        const ref = state.cards[msg.name] || ensureAny(msg.name);
         const formatted = formatValue(msg.value);
 
         ref.elValue.classList.remove("pending");
         ref.elValue.textContent = formatted;
 
-        // flash
+        // flash sul numero
         ref.elValue.classList.remove("flash");
         void ref.elValue.offsetWidth;
         ref.elValue.classList.add("flash");
 
+        // quality (card o widget usa la stessa classe CSS text)
         const good = msg.quality && msg.quality.startsWith("Good");
-        ref.elQuality.textContent = good
-          ? `${fmtTime(msg.timestamp)} · OK`
-          : `${fmtTime(msg.timestamp)} · ${msg.quality || "?"}`;
-        ref.elQuality.classList.toggle("bad", !good);
+        if (ref.elQuality) {
+          ref.elQuality.textContent = good
+            ? `${fmtTime(msg.timestamp)} · OK`
+            : `${fmtTime(msg.timestamp)} · ${msg.quality || "?"}`;
+          ref.elQuality.classList.toggle("bad", !good);
+        }
 
         $("lastUpdate").textContent = fmtTime(msg.timestamp);
         state.lastValues[msg.name] = msg;
+
+        // → aggiorna il widget grafico se necessario
+        if (ref.widget) updateWidget(ref, msg.value);
 
         // → spinge nel grafico (solo se numerico)
         if (typeof msg.value === "number") {
@@ -956,8 +1339,8 @@
         }
       }
 
-      // Pre-costruisci le card dalla config
-      CONFIG.tags.forEach((t) => ensureCard(t.name));
+      // Pre-costruisci card + widget dalla config
+      CONFIG.tags.forEach((t) => ensureAny(t));
 
       // ====================================================
       //  Chart (Chart.js v4) — live streaming
