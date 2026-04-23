@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07100f" />
+    <title>HMI · S7-1200 G2 Terminal · Public Gateway</title>
+
+    <!-- Fonts: Archivo (UI) + JetBrains Mono (valori) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- MQTT client (CDN) -->
+    <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+
+    <style>
+      /* ==================================================
+         Variabili + reset
+         ================================================== */
+      :root {
+        --bg: #07100f;
+        --bg-2: #0d1a18;
+        --panel: #0f201e;
+        --border: #1e3a36;
+        --border-dim: #142724;
+        --amber: #ffb400;
+        --amber-soft: #ffd166;
+        --amber-glow: rgba(255, 180, 0, 0.28);
+        --teal: #5af5c4;
+        --teal-dim: #2ea887;
+        --text: #d7e4e1;
+        --text-dim: #6e8582;
+        --text-mute: #415451;
+        --danger: #ff5a6a;
+        --ok: #5af5c4;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --mono: "JetBrains Mono", ui-monospace, monospace;
+        --sans: "Archivo", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+      }
+      body {
+        font-family: var(--sans);
+        color: var(--text);
+        background: radial-gradient(
+            ellipse at 20% 0%,
+            #112a26 0%,
+            transparent 60%
+          ),
+          radial-gradient(ellipse at 100% 100%, #0a1a18 0%, transparent 55%),
+          var(--bg);
+        min-height: 100vh;
+        letter-spacing: 0.01em;
+        overflow-x: hidden;
+      }
+
+      /* effetto grana sottile */
+      .grain {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.04;
+        z-index: 1;
+        background-image: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.4) 0px,
+          rgba(255, 255, 255, 0.4) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+        mix-blend-mode: overlay;
+      }
+
+      /* scanline orizzontali molto tenui */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(90, 245, 196, 0.015) 0px,
+          rgba(90, 245, 196, 0.015) 2px,
+          transparent 2px,
+          transparent 4px
+        );
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      /* ==================================================
+         Topbar
+         ================================================== */
+      .topbar {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 20px 32px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(13, 26, 24, 0.9),
+          rgba(13, 26, 24, 0.4)
+        );
+        backdrop-filter: blur(4px);
+        flex-wrap: wrap;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .logo-mark {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+      }
+      .logo-mark .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--amber);
+        box-shadow: 0 0 12px var(--amber-glow);
+      }
+      .logo-mark .dot:nth-child(2) {
+        background: var(--teal);
+        box-shadow: 0 0 12px rgba(90, 245, 196, 0.4);
+      }
+      .logo-mark .dot:nth-child(3) {
+        background: var(--text-dim);
+        box-shadow: none;
+      }
+      .brand-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.1;
+      }
+      .brand-title {
+        font-family: var(--mono);
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.12em;
+        color: var(--text);
+      }
+      .brand-sub {
+        font-family: var(--mono);
+        font-weight: 300;
+        font-size: 11px;
+        letter-spacing: 0.22em;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+
+      .meta {
+        display: flex;
+        gap: 26px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .meta-label {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        color: var(--text-mute);
+      }
+      .meta-value {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--text);
+        font-weight: 500;
+      }
+      .meta-item.status {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+      }
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--text-mute);
+        box-shadow: 0 0 8px transparent;
+        transition: all 0.3s var(--ease);
+      }
+      .status-dot.online {
+        background: var(--teal);
+        box-shadow: 0 0 14px rgba(90, 245, 196, 0.7);
+      }
+      .status-dot.offline {
+        background: var(--danger);
+        box-shadow: 0 0 10px rgba(255, 90, 106, 0.5);
+      }
+      .status-dot.warn {
+        background: var(--amber);
+        box-shadow: 0 0 10px var(--amber-glow);
+      }
+
+      /* ==================================================
+         Main
+         ================================================== */
+      .main {
+        position: relative;
+        z-index: 2;
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 40px 32px 80px;
+      }
+
+      .section {
+        margin-bottom: 56px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .bracket {
+        font-family: var(--mono);
+        color: var(--amber);
+        font-size: 18px;
+        font-weight: 500;
+      }
+      .section-title {
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.24em;
+        color: var(--text);
+        text-transform: uppercase;
+      }
+      .section-dash {
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(
+          to right,
+          var(--border) 0%,
+          transparent 100%
+        );
+      }
+      .section-hint {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        letter-spacing: 0.12em;
+      }
+
+      /* ==================================================
+         Tag grid + card
+         ================================================== */
+      .tag-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 20px;
+      }
+
+      .tag-card {
+        position: relative;
+        background: linear-gradient(
+          180deg,
+          rgba(15, 32, 30, 0.7),
+          rgba(10, 22, 20, 0.9)
+        );
+        border: 1px solid var(--border);
+        padding: 22px 22px 20px;
+        transition: all 0.25s var(--ease);
+        overflow: hidden;
+      }
+      .tag-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          to right,
+          transparent,
+          var(--teal-dim) 30%,
+          var(--teal-dim) 70%,
+          transparent
+        );
+        opacity: 0.5;
+      }
+      .tag-card:hover {
+        border-color: var(--teal-dim);
+        background: linear-gradient(
+          180deg,
+          rgba(18, 38, 35, 0.8),
+          rgba(12, 26, 24, 0.95)
+        );
+        transform: translateY(-1px);
+      }
+      .tag-card.writable {
+        cursor: pointer;
+      }
+      .tag-card.writable:hover::after {
+        content: "click per scrivere";
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        color: var(--amber);
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+
+      .tag-name {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: var(--text-dim);
+        text-transform: uppercase;
+      }
+      .tag-label {
+        font-family: var(--sans);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+        margin-top: 4px;
+        letter-spacing: 0.02em;
+      }
+      .tag-value-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 18px;
+        min-height: 44px;
+      }
+      .tag-value {
+        font-family: var(--mono);
+        font-size: 32px;
+        font-weight: 500;
+        color: var(--amber);
+        line-height: 1;
+        text-shadow: 0 0 20px var(--amber-glow);
+        letter-spacing: 0.02em;
+        overflow-wrap: anywhere;
+        transition: color 0.3s var(--ease);
+      }
+      .tag-value.pending {
+        color: var(--text-mute);
+        text-shadow: none;
+      }
+      .tag-value.flash {
+        animation: tagValueFlash 260ms var(--ease);
+      }
+      @keyframes tagValueFlash {
+        0% {
+          text-shadow: 0 0 20px var(--amber-glow);
+        }
+        40% {
+          text-shadow: 0 0 36px var(--amber), 0 0 8px #fff3;
+          color: #fff4d9;
+        }
+        100% {
+          text-shadow: 0 0 20px var(--amber-glow);
+        }
+      }
+      .tag-unit {
+        font-family: var(--mono);
+        font-size: 14px;
+        color: var(--text-dim);
+        font-weight: 400;
+      }
+      .tag-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px dashed var(--border-dim);
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        color: var(--text-mute);
+      }
+      .tag-quality {
+        color: var(--teal-dim);
+      }
+      .tag-quality.bad {
+        color: var(--danger);
+      }
+      .tag-writable-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--amber);
+      }
+      .tag-writable-badge::before {
+        content: "";
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--amber);
+        box-shadow: 0 0 6px var(--amber-glow);
+      }
+
+      /* ==================================================
+         Footer info strip
+         ================================================== */
+      .bottom {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 32px;
+        border-top: 1px solid var(--border);
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--text-dim);
+        letter-spacing: 0.15em;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .bottom a {
+        color: var(--teal-dim);
+        text-decoration: none;
+        border-bottom: 1px dashed transparent;
+        transition: border-bottom 0.2s;
+      }
+      .bottom a:hover {
+        border-bottom-color: var(--teal-dim);
+      }
+
+      /* ==================================================
+         Modal di scrittura
+         ================================================== */
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(3, 8, 7, 0.78);
+        backdrop-filter: blur(6px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 20px;
+      }
+      .modal-backdrop.show {
+        display: flex;
+        animation: modalFadeIn 0.2s var(--ease);
+      }
+      @keyframes modalFadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .modal {
+        width: 100%;
+        max-width: 420px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        padding: 28px 28px 24px;
+        position: relative;
+      }
+      .modal::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          to right,
+          transparent,
+          var(--amber) 40%,
+          var(--amber) 60%,
+          transparent
+        );
+      }
+      .modal-head {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        color: var(--amber);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+      .modal-title {
+        font-family: var(--sans);
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      .modal-desc {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--text-dim);
+        line-height: 1.6;
+        margin-bottom: 20px;
+      }
+      .modal-input {
+        width: 100%;
+        padding: 14px 16px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--amber);
+        font-family: var(--mono);
+        font-size: 20px;
+        outline: none;
+        transition: all 0.2s;
+      }
+      .modal-input:focus {
+        border-color: var(--amber);
+        box-shadow: 0 0 0 3px var(--amber-glow);
+      }
+      .modal-hint {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--text-mute);
+        letter-spacing: 0.16em;
+        margin-top: 6px;
+        text-transform: uppercase;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 22px;
+      }
+      .btn {
+        flex: 1;
+        padding: 12px 18px;
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-dim);
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .btn:hover:not(:disabled) {
+        color: var(--text);
+        border-color: var(--teal-dim);
+      }
+      .btn-primary {
+        border-color: var(--amber);
+        color: var(--amber);
+        background: rgba(255, 180, 0, 0.06);
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: rgba(255, 180, 0, 0.14);
+        box-shadow: 0 0 14px var(--amber-glow);
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      /* ==================================================
+         Toast
+         ================================================== */
+      .toast {
+        position: fixed;
+        top: 32px;
+        right: 32px;
+        z-index: 200;
+        max-width: 400px;
+        padding: 14px 20px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--teal);
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--text);
+        opacity: 0;
+        transform: translateX(24px);
+        transition: all 0.3s var(--ease);
+        pointer-events: none;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .toast.error {
+        border-left-color: var(--danger);
+      }
+      .toast-title {
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        color: var(--teal);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .toast.error .toast-title {
+        color: var(--danger);
+      }
+
+      /* ==================================================
+         Responsive
+         ================================================== */
+      @media (max-width: 720px) {
+        .topbar {
+          padding: 16px 18px;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 14px;
+        }
+        .meta {
+          gap: 18px;
+        }
+        .main {
+          padding: 28px 18px 60px;
+        }
+        .tag-value {
+          font-size: 26px;
+        }
+        .toast {
+          top: 16px;
+          right: 16px;
+          left: 16px;
+          max-width: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="grain"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo-mark">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">HMI · PUBLIC GATEWAY</span>
+          <span class="brand-sub">SIEMENS · S7-1200 G2 · via MQTT</span>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div class="meta-item">
+          <span class="meta-label">BROKER</span>
+          <span class="meta-value" id="brokerHost">—</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">TAGS</span>
+          <span class="meta-value" id="tagCount">0</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">LAST UPDATE</span>
+          <span class="meta-value" id="lastUpdate">—</span>
+        </div>
+        <div class="meta-item status">
+          <span class="status-dot warn" id="statusDot"></span>
+          <span class="meta-value" id="statusLabel">CONNECTING</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="section">
+        <div class="section-head">
+          <span class="bracket">[</span>
+          <span class="section-title">Live Channels</span>
+          <span class="bracket">]</span>
+          <span class="section-dash"></span>
+          <span class="section-hint" id="sectionHint">awaiting data…</span>
+        </div>
+        <div class="tag-grid" id="tagGrid">
+          <!-- Le card dei tag vengono create da JS -->
+        </div>
+      </section>
+    </main>
+
+    <footer class="bottom">
+      <span>ECOENERG · Public HMI · S7-1200 G2</span>
+      <span>
+        Data flow:
+        <a href="https://hivemq.com" target="_blank" rel="noopener"
+          >HiveMQ Cloud</a
+        >
+        · MQTT over WSS/TLS
+      </span>
+      <span id="clock">--:--:--</span>
+    </footer>
+
+    <!-- Toast feedback -->
+    <div id="toast" class="toast">
+      <div class="toast-title" id="toastTitle">STATUS</div>
+      <div id="toastBody">—</div>
+    </div>
+
+    <!-- Modal scrittura -->
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal">
+        <div class="modal-head" id="modalHead">WRITE TAG</div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-desc" id="modalDesc">
+          Inserisci il nuovo valore da inviare al PLC.
+        </div>
+        <input
+          type="text"
+          id="modalInput"
+          class="modal-input"
+          placeholder="0"
+          autocomplete="off"
+        />
+        <div class="modal-hint" id="modalHint">ENTER per confermare · ESC per annullare</div>
+        <div class="modal-actions">
+          <button class="btn" id="btnCancel">Annulla</button>
+          <button class="btn btn-primary" id="btnSend">Scrivi al PLC</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ====================================================
+      //  CONFIG
+      // ====================================================
+      const CONFIG = {
+        broker: {
+          // URL WSS del cluster HiveMQ Cloud
+          url: "wss://df33f6dacc0c4c4a9d1e850d1f9837b5.s1.eu.hivemq.cloud:8884/mqtt",
+          username: "web-viewer",
+          // ⚠️ password visibile a chiunque apra il repo. L'utente
+          //    web-viewer per design ha solo permessi limitati.
+          password: "EcoenergMik2026@",
+        },
+        topicPrefix: "hmi/siemens",
+
+        // Lista tag: metadata statica. Se il backend pubblica
+        // un tag che non è qui, viene comunque mostrato con
+        // label uguale al nome.
+        tags: [
+          { name: "Static_1", label: "Static 1", unit: "", writable: true },
+          { name: "Static_2", label: "Static 2", unit: "", writable: true },
+          { name: "Static_3", label: "Static 3", unit: "", writable: true },
+          { name: "Static_4", label: "Static 4", unit: "", writable: true },
+          { name: "Static_5", label: "Static 5", unit: "", writable: true },
+        ],
+      };
+
+      // ====================================================
+      //  Stato globale
+      // ====================================================
+      const state = {
+        cards: {}, // name -> {elValue, elFoot, elQuality, label, unit, writable}
+        lastValues: {}, // name -> ultimo messaggio completo
+        pendingWrites: {}, // reqId -> {name, onAck}
+        plcConnected: null,
+        client: null,
+      };
+
+      // ====================================================
+      //  UI helpers
+      // ====================================================
+      const $ = (id) => document.getElementById(id);
+
+      function setBrokerStatus(state_, label) {
+        const dot = $("statusDot");
+        dot.classList.remove("online", "offline", "warn");
+        if (state_) dot.classList.add(state_);
+        $("statusLabel").textContent = label;
+      }
+
+      function showToast(title, body, isError = false) {
+        const t = $("toast");
+        $("toastTitle").textContent = title;
+        $("toastBody").textContent = body;
+        t.classList.toggle("error", isError);
+        t.classList.add("show");
+        clearTimeout(t._hideTimer);
+        t._hideTimer = setTimeout(() => t.classList.remove("show"), 3500);
+      }
+
+      function formatValue(v) {
+        if (v === null || v === undefined) return "—";
+        if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+        if (typeof v === "number") {
+          // Se ha tanti decimali (tipico dei Float dal PLC),
+          // tronchiamo ragionevolmente
+          if (!Number.isInteger(v)) return v.toFixed(2);
+          return String(v);
+        }
+        return String(v);
+      }
+
+      function fmtTime(iso) {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        return d.toLocaleTimeString("it-IT", { hour12: false });
+      }
+
+      // ====================================================
+      //  Creazione card
+      // ====================================================
+      function ensureCard(name, meta = {}) {
+        if (state.cards[name]) return state.cards[name];
+
+        const def =
+          CONFIG.tags.find((t) => t.name === name) || {
+            name,
+            label: meta.label || name,
+            unit: meta.unit || "",
+            writable: false,
+          };
+
+        const card = document.createElement("div");
+        card.className = "tag-card" + (def.writable ? " writable" : "");
+        card.innerHTML = `
+          <div class="tag-name">${def.name}</div>
+          <div class="tag-label">${def.label}</div>
+          <div class="tag-value-row">
+            <span class="tag-value pending" data-value>—</span>
+            <span class="tag-unit">${def.unit || ""}</span>
+          </div>
+          <div class="tag-foot">
+            <span class="tag-quality">awaiting</span>
+            <span>${
+              def.writable
+                ? '<span class="tag-writable-badge">RW</span>'
+                : '<span style="color:var(--text-mute)">RO</span>'
+            }</span>
+          </div>
+        `;
+
+        if (def.writable) {
+          card.addEventListener("click", () => openWriteModal(def));
+        }
+
+        $("tagGrid").appendChild(card);
+
+        const ref = {
+          card,
+          elValue: card.querySelector("[data-value]"),
+          elQuality: card.querySelector(".tag-quality"),
+          def,
+        };
+        state.cards[name] = ref;
+        $("tagCount").textContent = Object.keys(state.cards).length;
+        return ref;
+      }
+
+      function renderTagUpdate(msg) {
+        const ref = ensureCard(msg.name);
+        const formatted = formatValue(msg.value);
+
+        ref.elValue.classList.remove("pending");
+        ref.elValue.textContent = formatted;
+
+        // flash animation
+        ref.elValue.classList.remove("flash");
+        void ref.elValue.offsetWidth; // retrigger
+        ref.elValue.classList.add("flash");
+
+        // quality
+        const good = msg.quality && msg.quality.startsWith("Good");
+        ref.elQuality.textContent = good
+          ? `${fmtTime(msg.timestamp)} · OK`
+          : `${fmtTime(msg.timestamp)} · ${msg.quality || "?"}`;
+        ref.elQuality.classList.toggle("bad", !good);
+
+        $("lastUpdate").textContent = fmtTime(msg.timestamp);
+
+        state.lastValues[msg.name] = msg;
+      }
+
+      // Pre-costruisci le card dalla config (prima ancora dei dati)
+      CONFIG.tags.forEach((t) => ensureCard(t.name));
+
+      // ====================================================
+      //  Modal di scrittura
+      // ====================================================
+      let currentWriteTarget = null;
+
+      function openWriteModal(def) {
+        currentWriteTarget = def;
+        $("modalTitle").textContent = def.label + "  (" + def.name + ")";
+        const lastVal = state.lastValues[def.name]?.value;
+        $("modalDesc").textContent = `Valore attuale: ${formatValue(lastVal)}. Inserisci il nuovo valore da scrivere al PLC.`;
+        $("modalInput").value = "";
+        $("modalInput").placeholder = formatValue(lastVal);
+        $("modalBackdrop").classList.add("show");
+        setTimeout(() => $("modalInput").focus(), 100);
+      }
+
+      function closeModal() {
+        $("modalBackdrop").classList.remove("show");
+        currentWriteTarget = null;
+      }
+
+      function submitWrite() {
+        if (!currentWriteTarget) return;
+        const raw = $("modalInput").value.trim();
+        if (raw === "") {
+          showToast("Scrittura", "Inserisci un valore", true);
+          return;
+        }
+
+        // Cast al tipo più sensato (numero o stringa)
+        let value = raw;
+        if (!isNaN(parseFloat(raw)) && isFinite(raw)) {
+          value = parseFloat(raw);
+        } else if (raw.toLowerCase() === "true") value = true;
+        else if (raw.toLowerCase() === "false") value = false;
+
+        // IMPORTANTE: catturo i dati del target in variabili locali *prima*
+        // del publish, perché closeModal() azzera currentWriteTarget in modo
+        // sincrono e il callback di publish() si risveglia dopo il PUBACK,
+        // quando currentWriteTarget è già null. Se il callback leggesse
+        // currentWriteTarget.name direttamente → TypeError → mqtt.js crasha
+        // in modo non catturato e il client smette di ricevere messaggi
+        // (sintomo: la pagina si congela finché non fai F5).
+        const targetName = currentWriteTarget.name;
+        const sentValue = value;
+
+        const reqId =
+          "w-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+
+        const payload = JSON.stringify({ value, reqId });
+        const topic = `${CONFIG.topicPrefix}/cmd/${targetName}`;
+
+        if (!state.client || !state.client.connected) {
+          showToast("Scrittura", "Non connesso al broker", true);
+          return;
+        }
+
+        state.pendingWrites[reqId] = {
+          name: targetName,
+          timeout: setTimeout(() => {
+            if (state.pendingWrites[reqId]) {
+              showToast("Scrittura", "Timeout ack dal PLC", true);
+              delete state.pendingWrites[reqId];
+            }
+          }, 5000),
+        };
+
+        state.client.publish(topic, payload, { qos: 1 }, (err) => {
+          if (err) {
+            showToast("Scrittura", "Publish fallito: " + err.message, true);
+            // Pure qui: il pendingWrites potrebbe essere già stato cancellato
+            // dal timeout, quindi accedere a .timeout senza controllo crasha.
+            const p = state.pendingWrites[reqId];
+            if (p) {
+              clearTimeout(p.timeout);
+              delete state.pendingWrites[reqId];
+            }
+            return;
+          }
+          showToast(
+            "Scrittura",
+            `Comando inviato: ${targetName} = ${sentValue}`
+          );
+        });
+
+        closeModal();
+      }
+
+      $("btnCancel").addEventListener("click", closeModal);
+      $("btnSend").addEventListener("click", submitWrite);
+      $("modalBackdrop").addEventListener("click", (e) => {
+        if (e.target.id === "modalBackdrop") closeModal();
+      });
+      $("modalInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitWrite();
+        else if (e.key === "Escape") closeModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (
+          e.key === "Escape" &&
+          $("modalBackdrop").classList.contains("show")
+        )
+          closeModal();
+      });
+
+      // ====================================================
+      //  MQTT connection
+      // ====================================================
+      function connectMqtt() {
+        const u = new URL(CONFIG.broker.url);
+        $("brokerHost").textContent = u.hostname;
+
+        setBrokerStatus("warn", "CONNECTING");
+
+        const clientId =
+          "web-hmi-" + Math.random().toString(16).slice(2, 10);
+
+        state.client = mqtt.connect(CONFIG.broker.url, {
+          username: CONFIG.broker.username,
+          password: CONFIG.broker.password,
+          clientId,
+          clean: true,
+          reconnectPeriod: 3000,
+          connectTimeout: 10000,
+          keepalive: 30,
+        });
+
+        state.client.on("connect", () => {
+          setBrokerStatus("online", "ONLINE");
+          showToast("Broker", "Connesso a HiveMQ Cloud");
+          $("sectionHint").textContent = "live stream attivo";
+
+          const prefix = CONFIG.topicPrefix;
+          state.client.subscribe(`${prefix}/tag/+`, { qos: 0 });
+          state.client.subscribe(`${prefix}/status`, { qos: 1 });
+          state.client.subscribe(`${prefix}/ack/+`, { qos: 1 });
+        });
+
+        state.client.on("reconnect", () => {
+          setBrokerStatus("warn", "RECONNECTING");
+        });
+
+        state.client.on("offline", () => {
+          setBrokerStatus("offline", "OFFLINE");
+        });
+
+        state.client.on("error", (err) => {
+          console.error("MQTT error", err);
+          setBrokerStatus("offline", "ERROR");
+          showToast("Broker", err.message || "Errore connessione", true);
+        });
+
+        state.client.on("message", (topic, payload) => {
+          const prefix = CONFIG.topicPrefix;
+          let s;
+          try {
+            s = JSON.parse(payload.toString());
+          } catch (err) {
+            console.warn("[MQTT rx] JSON invalid on", topic, payload.toString());
+            return;
+          }
+          console.log("[MQTT rx]", topic, s);
+
+          // hmi/siemens/tag/<name>
+          if (topic.startsWith(`${prefix}/tag/`)) {
+            const name = topic.substring(prefix.length + 5); // +5 = "/tag/"
+            renderTagUpdate({ ...s, name: s.name || name });
+            return;
+          }
+
+          // hmi/siemens/status
+          if (topic === `${prefix}/status`) {
+            state.plcConnected = s.connected;
+            if (s.connected) {
+              $("sectionHint").textContent = "PLC online · live stream";
+            } else {
+              $("sectionHint").textContent =
+                "PLC offline (reason: " + (s.reason || "?") + ")";
+            }
+            return;
+          }
+
+          // hmi/siemens/ack/<name>
+          if (topic.startsWith(`${prefix}/ack/`)) {
+            const name = topic.substring(prefix.length + 5);
+            const reqId = s.reqId;
+            const pending = reqId ? state.pendingWrites[reqId] : null;
+            if (pending) {
+              clearTimeout(pending.timeout);
+              delete state.pendingWrites[reqId];
+            }
+            if (s.ok) {
+              showToast("PLC ack", `${name} scritto: ${s.value}`);
+            } else {
+              showToast(
+                "PLC ack",
+                `${name} rifiutato: ${s.error || "?"}`,
+                true
+              );
+            }
+            return;
+          }
+        });
+      }
+
+      connectMqtt();
+
+      // ====================================================
+      //  Orologio
+      // ====================================================
+      function updateClock() {
+        const now = new Date();
+        $("clock").textContent = now.toLocaleTimeString("it-IT", {
+          hour12: false,
+        });
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+    </script>
+  </body>
+</html>
