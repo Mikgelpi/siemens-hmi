@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#07100f" />
+    <meta name="theme-color" content="#060d1a" />
     <title>HMI · S7-1200 G2 Terminal · Public Gateway</title>
 
     <!-- Fonts: Archivo (UI) + JetBrains Mono (valori) -->
@@ -24,34 +24,37 @@
          Variabili + reset
          ================================================== */
       :root {
-        --bg: #07100f;
-        --bg-2: #0d1a18;
-        --panel: #0f201e;
-        --panel-raised: #132825;
-        --border: #1e3a36;
-        --border-dim: #142724;
+        /* Palette blu notte industriale */
+        --bg: #060d1a;
+        --bg-2: #0a1526;
+        --panel: #0e1b30;
+        --panel-raised: #14253e;
+        --border: #1f3560;
+        --border-dim: #152843;
         --amber: #ffb400;
         --amber-soft: #ffd166;
         --amber-glow: rgba(255, 180, 0, 0.28);
-        --teal: #5af5c4;
-        --teal-dim: #2ea887;
-        --text: #d7e4e1;
-        --text-dim: #6e8582;
-        --text-mute: #415451;
+        /* "teal" → blu elettrico (stesse variabili, ora tinta blu) */
+        --teal: #5ab8ff;
+        --teal-dim: #2e7fc4;
+        --teal-glow: rgba(90, 184, 255, 0.28);
+        --text: #d9e2ec;
+        --text-dim: #7a8aa3;
+        --text-mute: #455670;
         --danger: #ff5a6a;
-        --ok: #5af5c4;
+        --ok: #5ab8ff;
         --ease: cubic-bezier(0.22, 1, 0.36, 1);
         --mono: "JetBrains Mono", ui-monospace, monospace;
         --sans: "Archivo", system-ui, sans-serif;
 
-        /* Paletta grafico (tag 1..8) */
-        --c1: #5af5c4;
+        /* Paletta grafico (tag 1..8) — dominante blu/cool */
+        --c1: #5ab8ff;
         --c2: #ffb400;
-        --c3: #7aa9ff;
+        --c3: #7de3ff;
         --c4: #ff7ac6;
-        --c5: #c6ff5a;
+        --c5: #a3c9ff;
         --c6: #ff9c6e;
-        --c7: #a5f3fc;
+        --c7: #c4d8ff;
         --c8: #e9b8ff;
       }
 
@@ -65,8 +68,8 @@
         font-family: var(--sans);
         color: var(--text);
         background:
-          radial-gradient(ellipse at 20% 0%, #112a26 0%, transparent 60%),
-          radial-gradient(ellipse at 100% 100%, #0a1a18 0%, transparent 55%),
+          radial-gradient(ellipse at 20% 0%, #10274f 0%, transparent 60%),
+          radial-gradient(ellipse at 100% 100%, #071326 0%, transparent 55%),
           var(--bg);
         min-height: 100vh;
         letter-spacing: 0.01em;
@@ -93,7 +96,7 @@
         position: fixed; inset: 0;
         background: repeating-linear-gradient(
           to bottom,
-          rgba(90,245,196,.015) 0 2px,
+          rgba(90,184,255,.018) 0 2px,
           transparent 2px 4px
         );
         pointer-events: none;
@@ -208,7 +211,7 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(90deg, transparent, rgba(90,245,196,.02));
+        background: linear-gradient(90deg, transparent, rgba(90,184,255,.025));
         pointer-events: none;
       }
       .status-cell .dot {
@@ -220,7 +223,7 @@
       }
       .status-cell .dot.online {
         background: var(--ok);
-        box-shadow: 0 0 12px var(--ok), 0 0 0 3px rgba(90,245,196,.1);
+        box-shadow: 0 0 12px var(--ok), 0 0 0 3px rgba(90,184,255,.12);
         animation: pulse 2s infinite;
       }
       .status-cell .dot.offline {
@@ -333,7 +336,7 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(90,245,196,.04) 0%, transparent 60%);
+        background: linear-gradient(180deg, rgba(90,184,255,.05) 0%, transparent 60%);
         pointer-events: none;
       }
 
@@ -440,7 +443,7 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(90,245,196,.03) 0%, transparent 50%);
+        background: linear-gradient(180deg, rgba(90,184,255,.04) 0%, transparent 50%);
         pointer-events: none;
       }
 
@@ -471,7 +474,7 @@
       .chart-chip.active {
         border-color: currentColor;
         color: var(--chip-color, var(--teal));
-        background: rgba(90,245,196,.05);
+        background: rgba(90,184,255,.06);
       }
       .chart-chip .swatch {
         width: 8px; height: 8px;
@@ -494,7 +497,7 @@
       .modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(7, 16, 15, .8);
+        background: rgba(6, 13, 26, .8);
         backdrop-filter: blur(6px);
         -webkit-backdrop-filter: blur(6px);
         display: none;
@@ -553,7 +556,7 @@
       }
       .modal-input:focus {
         border-color: var(--teal);
-        box-shadow: 0 0 0 3px rgba(90,245,196,.1);
+        box-shadow: 0 0 0 3px rgba(90,184,255,.12);
       }
       .modal-btns {
         display: grid;
@@ -809,10 +812,10 @@
         },
       };
 
-      // Palette grafico (CSS var --c1..--c8)
+      // Palette grafico (CSS var --c1..--c8) — dominante blu/cool
       const CHART_COLORS = [
-        "#5af5c4", "#ffb400", "#7aa9ff", "#ff7ac6",
-        "#c6ff5a", "#ff9c6e", "#a5f3fc", "#e9b8ff",
+        "#5ab8ff", "#ffb400", "#7de3ff", "#ff7ac6",
+        "#a3c9ff", "#ff9c6e", "#c4d8ff", "#e9b8ff",
       ];
 
       // ====================================================
@@ -1000,13 +1003,13 @@
             plugins: {
               legend: { display: false },
               tooltip: {
-                backgroundColor: "#0f201e",
-                borderColor: "#1e3a36",
+                backgroundColor: "#0e1b30",
+                borderColor: "#1f3560",
                 borderWidth: 1,
                 titleFont: { family: "JetBrains Mono", size: 11 },
                 bodyFont: { family: "JetBrains Mono", size: 12 },
                 titleColor: "#ffb400",
-                bodyColor: "#d7e4e1",
+                bodyColor: "#d9e2ec",
                 padding: 10,
                 cornerRadius: 6,
                 displayColors: true,
@@ -1020,22 +1023,22 @@
             scales: {
               x: {
                 ticks: {
-                  color: "#6e8582",
+                  color: "#7a8aa3",
                   font: { family: "JetBrains Mono", size: 9 },
                   maxRotation: 0,
                   autoSkip: true,
                   maxTicksLimit: 6,
                 },
-                grid: { color: "rgba(30,58,54,.4)", drawTicks: false },
-                border: { color: "#1e3a36" },
+                grid: { color: "rgba(31,53,96,.45)", drawTicks: false },
+                border: { color: "#1f3560" },
               },
               y: {
                 ticks: {
-                  color: "#6e8582",
+                  color: "#7a8aa3",
                   font: { family: "JetBrains Mono", size: 10 },
                 },
-                grid: { color: "rgba(30,58,54,.4)", drawTicks: false },
-                border: { color: "#1e3a36" },
+                grid: { color: "rgba(31,53,96,.45)", drawTicks: false },
+                border: { color: "#1f3560" },
               },
             },
           },
